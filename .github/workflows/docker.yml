@@ -9,10 +9,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements_train.txt
+          python -m pip install fastapi==0.141.1 httpx==0.28.1
+
+      - name: Run pytest
+        run: python -m pytest -q
 
       - name: Build image
         run: docker build -f app/Dockerfile -t subscription-ml:ci .
 
-      - name: Run prediction smoke test
-        run: docker run --rm subscription-ml:ci
+      - name: Start container
+        run: docker run -d --name subscription-ml-ci -p 8000:8000 subscription-ml:ci
+
+      - name: Wait for API
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://localhost:8000/health; then
+              echo
+              echo "API is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "API did not become ready"
+          docker logs subscription-ml-ci
+          exit 1
+
+      - name: Smoke test health endpoint
+        run: |
+          curl --fail --silent --show-error \
+            http://localhost:8000/health
+
+      - name: Smoke test spend prediction
+        run: |
+          curl --fail --silent --show-error \
+            -X POST http://localhost:8000/predict/spend \
+            -H "Content-Type: application/json" \
+            -d '{
+              "age": 34,
+              "city": "warszawa",
+              "monthly_income_pln": 8500.0,
+              "tenure_months": 18,
+              "avg_logins_last_30d": 9,
+              "support_tickets_last_30d": 1,
+              "satisfaction_score": 7,
+              "plan": "standard",
+              "auto_renew": 1,
+              "discount_pct": 0,
+              "ac
