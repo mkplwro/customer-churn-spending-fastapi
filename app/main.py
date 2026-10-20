@@ -20,6 +20,19 @@ async def lifespan(app: FastAPI):
     models.clear()
 app = FastAPI(title="Customer Analytics API", lifespan=lifespan)
 
+@app.get("/")
+def root():
+    return {
+        "message": "Customer Analytics API is running",
+        "docs": "/docs",
+        "health": "/health",
+        "endpoints": {
+            "predict_spend": "/predict/spend",
+            "predict_churn": "/predict/churn",
+        },
+    }
+
+
 class Customer(BaseModel):
     age: int
     city: str
